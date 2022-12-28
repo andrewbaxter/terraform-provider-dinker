@@ -1,17 +1,11 @@
-This provider runs a command locally.
-
-Unlike using `null_resource` with `local-exec`, this is an "always-dirty" resource which will be updated every time you apply the stack. This makes it good for connecting to local builders like make, where the build is very fast if nothing changed.
-
-It has an optional `output` path attribute which is a file that will be hashed when the build completes. You can use this as an input for other resources.
-
-If the command has multiple outputs, you should use `hashicorp/local` resources with a `depends_on` the `run` resource and ignore `output`.
+This provider generates an OCI/Docker image and pushes it to a location of your choice. It uses [dinker](https://github.com/andrewbaxter/dinker) for building the image, which requires no privileges and is very fast, but can only add files.
 
 # Installation with Terraform CDK
 
 Run
 
 ```
-cdktf provider add andrewbaxter/localrun
+cdktf provider add andrewbaxter/dinker
 ```
 
 # Installation with Terraform
@@ -33,7 +27,3 @@ Run
 ```
 
 This will generate the source files and render the docs.
-
-# Technical Details
-
-This uses a fake `_auto_update` attribute which synthetically changes every time the provider's `Read` operation is called, causing Terraform to believe the resource is out of sync and needs an update.

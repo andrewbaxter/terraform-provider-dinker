@@ -14,6 +14,7 @@ import (
 	"github.com/Wessie/appdirs"
 	"github.com/andrewbaxter/dinker/dinkerlib"
 	imagecopy "github.com/containers/image/v5/copy"
+	"github.com/containers/image/v5/manifest"
 	"github.com/containers/image/v5/oci/archive"
 	ocidir "github.com/containers/image/v5/oci/layout"
 	"github.com/containers/image/v5/signature"
@@ -105,6 +106,7 @@ type ImageResourceModel struct {
 	ClearEnv     types.Bool                    `tfsdk:"clear_env"`
 	WorkingDir   types.String                  `tfsdk:"working_dir"`
 	Ports        []ImageResourceModelPort      `tfsdk:"ports"`
+	Hash         types.String                  `tfsdk:"hash"`
 }
 
 type ImageResource struct {
@@ -240,6 +242,10 @@ func (ImageResource) Schema(_ context.Context, req resource.SchemaRequest, resp 
 				PlanModifiers: []planmodifier.List{
 					listplanmodifier.RequiresReplace(),
 				},
+			},
+			"hash": resourceschema.StringAttribute{
+				Description: "Hash of the pushed image in a format `algo:hex` like `sha256:0123abcd...`",
+				Computed:    true,
 			},
 		},
 	}
@@ -422,7 +428,7 @@ func (i *ImageResource) Create(ctx context.Context, req resource.CreateRequest, 
 					panic(err)
 				}
 
-				_, err = imagecopy.Image(
+				manifestRaw, err := imagecopy.Image(
 					context.TODO(),
 					policyContext,
 					destRef,
@@ -434,6 +440,12 @@ func (i *ImageResource) Create(ctx context.Context, req resource.CreateRequest, 
 				if err != nil {
 					return fmt.Errorf("error uploading image: %w", err)
 				}
+
+				manifestDigest, err := manifest.Digest(manifestRaw)
+				if err != nil {
+					return err
+				}
+				state.Hash = types.StringValue(manifestDigest.String())
 			}
 		}
 
