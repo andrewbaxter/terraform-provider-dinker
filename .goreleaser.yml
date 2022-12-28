@@ -16,7 +16,10 @@ builds:
     ldflags:
       - "-s -w -X main.version={{.Version}} -X main.commit={{.Commit}}"
     goos:
+      - freebsd
+      - windows
       - linux
+      - darwin
     goarch:
       - amd64
       - "386"
@@ -25,6 +28,9 @@ builds:
     ignore:
       - goos: darwin
         goarch: "386"
+    tags:
+      # avoids cgo, but restricts signature creation
+      - containers_image_openpgp
     binary: "{{ .ProjectName }}_v{{ .Version }}"
 archives:
   - format: zip
