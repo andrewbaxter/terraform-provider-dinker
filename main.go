@@ -73,11 +73,11 @@ func (ThisProvider) Resources(context.Context) []func() resource.Resource {
 
 func (ThisProvider) Schema(ctx context.Context, req provider.SchemaRequest, resp *provider.SchemaResponse) {
 	resp.Schema = providerschema.Schema{
-		Description: "Build and store an OCI image",
+		MarkdownDescription: "Build and store an OCI image",
 		Attributes: map[string]providerschema.Attribute{
 			"cache_dir": providerschema.StringAttribute{
-				Optional:    true,
-				Description: "Cache intermediate build files (namely FROM images)",
+				Optional:            true,
+				MarkdownDescription: "Cache intermediate build files (namely FROM images)",
 			},
 		},
 	}
@@ -130,60 +130,60 @@ func (ImageResource) Metadata(_ context.Context, req resource.MetadataRequest, r
 
 func (ImageResource) Schema(_ context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = resourceschema.Schema{
-		Description: "Build and push an image",
+		MarkdownDescription: "Build and push an image",
 		Attributes: map[string]resourceschema.Attribute{
 			"from": resourceschema.StringAttribute{
-				Description: "FROM image to base generated image on; skopeo-style reference, see <https://github.com/containers/image/blob/main/docs/containers-transports.5.md> for a full list",
-				Required:    true,
+				MarkdownDescription: "FROM image to base generated image on; skopeo-style reference, see <https://github.com/containers/image/blob/main/docs/containers-transports.5.md> for a full list",
+				Required:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
 			"from_user": resourceschema.StringAttribute{
-				Description: "User to use if pulling FROM image from remote",
-				Optional:    true,
+				MarkdownDescription: "User to use if pulling FROM image from remote",
+				Optional:            true,
 			},
 			"from_password": resourceschema.StringAttribute{
-				Description: "Password to use if pulling FROM image from remote",
-				Optional:    true,
+				MarkdownDescription: "Password to use if pulling FROM image from remote",
+				Optional:            true,
 			},
 			"dest": resourceschema.StringAttribute{
-				Description: "Where to send generated image; skopeo-style reference, see <https://github.com/containers/image/blob/main/docs/containers-transports.5.md> for a full list",
-				Required:    true,
+				MarkdownDescription: "Where to send generated image; skopeo-style reference, see <https://github.com/containers/image/blob/main/docs/containers-transports.5.md> for a full list",
+				Required:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
 			"dest_user": resourceschema.StringAttribute{
-				Description: "User to use if pushing generated image to remote",
-				Optional:    true,
+				MarkdownDescription: "User to use if pushing generated image to remote",
+				Optional:            true,
 			},
 			"dest_password": resourceschema.StringAttribute{
-				Description: "Password to use if pushing generated image to remote",
-				Optional:    true,
+				MarkdownDescription: "Password to use if pushing generated image to remote",
+				Optional:            true,
 			},
 			"files": resourceschema.ListNestedAttribute{
-				Description: "Files to add to image",
-				Required:    true,
+				MarkdownDescription: "Files to add to image",
+				Required:            true,
 				NestedObject: resourceschema.NestedAttributeObject{
 					Attributes: map[string]resourceschema.Attribute{
 						"source": resourceschema.StringAttribute{
-							Description: "Local file to include in image",
-							Required:    true,
+							MarkdownDescription: "Local file to include in image",
+							Required:            true,
 							PlanModifiers: []planmodifier.String{
 								stringplanmodifier.RequiresReplace(),
 							},
 						},
 						"dest": resourceschema.StringAttribute{
-							Description: "Where to place the file in the image; defaults to filename of source in image root",
-							Optional:    true,
+							MarkdownDescription: "Where to place the file in the image; defaults to filename of source in image root",
+							Optional:            true,
 							PlanModifiers: []planmodifier.String{
 								stringplanmodifier.RequiresReplace(),
 							},
 						},
 						"mode": resourceschema.StringAttribute{
-							Description: "File mode in octal, defaults to 0644",
-							Optional:    true,
+							MarkdownDescription: "File mode in octal, defaults to 0644",
+							Optional:            true,
 							PlanModifiers: []planmodifier.String{
 								stringplanmodifier.RequiresReplace(),
 							},
@@ -195,65 +195,65 @@ func (ImageResource) Schema(_ context.Context, req resource.SchemaRequest, resp 
 				},
 			},
 			"clear_env": resourceschema.BoolAttribute{
-				Description: "User to use if pushing generated image to remote",
-				Optional:    true,
+				MarkdownDescription: "User to use if pushing generated image to remote",
+				Optional:            true,
 				PlanModifiers: []planmodifier.Bool{
 					boolplanmodifier.RequiresReplace(),
 				},
 			},
 			"add_env": resourceschema.MapAttribute{
-				Description: "Add these environment variables when running command in container",
-				ElementType: types.StringType,
-				Optional:    true,
+				MarkdownDescription: "Add these environment variables when running command in container",
+				ElementType:         types.StringType,
+				Optional:            true,
 				PlanModifiers: []planmodifier.Map{
 					mapplanmodifier.RequiresReplace(),
 				},
 			},
 			"working_dir": resourceschema.StringAttribute{
-				Description: "Working dir for command in container; defaults to working dir in FROM image",
-				Optional:    true,
+				MarkdownDescription: "Working dir for command in container; defaults to working dir in FROM image",
+				Optional:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
 			"user": resourceschema.StringAttribute{
-				Description: "User to run command as in container; defaults to user in FROM image",
-				Optional:    true,
+				MarkdownDescription: "User to run command as in container; defaults to user in FROM image",
+				Optional:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
 			"entrypoint": resourceschema.ListAttribute{
-				Description: "Un-overridable command parts, concatenated before `cmd`",
-				ElementType: types.StringType,
-				Optional:    true,
+				MarkdownDescription: "Un-overridable command parts, concatenated before `cmd`",
+				ElementType:         types.StringType,
+				Optional:            true,
 				PlanModifiers: []planmodifier.List{
 					listplanmodifier.RequiresReplace(),
 				},
 			},
 			"cmd": resourceschema.ListAttribute{
-				Description: "Overridable command parts, concatenated after `entrypoint`",
-				ElementType: types.StringType,
-				Optional:    true,
+				MarkdownDescription: "Overridable command parts, concatenated after `entrypoint`",
+				ElementType:         types.StringType,
+				Optional:            true,
 				PlanModifiers: []planmodifier.List{
 					listplanmodifier.RequiresReplace(),
 				},
 			},
 			"ports": resourceschema.ListNestedAttribute{
-				Description: "Container ports to expose",
-				Optional:    true,
+				MarkdownDescription: "Container ports to expose",
+				Optional:            true,
 				NestedObject: resourceschema.NestedAttributeObject{
 					Attributes: map[string]resourceschema.Attribute{
 						"port": resourceschema.Int64Attribute{
-							Description: "Internal port to make available",
-							Required:    true,
+							MarkdownDescription: "Internal port to make available",
+							Required:            true,
 							PlanModifiers: []planmodifier.Int64{
 								int64planmodifier.RequiresReplace(),
 							},
 						},
 						"transport": resourceschema.StringAttribute{
-							Description: "Port protocol (`tcp`), defaults to `tcp`",
-							Optional:    true,
+							MarkdownDescription: "Port protocol (`tcp`), defaults to `tcp`",
+							Optional:            true,
 							PlanModifiers: []planmodifier.String{
 								stringplanmodifier.RequiresReplace(),
 							},
@@ -265,23 +265,23 @@ func (ImageResource) Schema(_ context.Context, req resource.SchemaRequest, resp 
 				},
 			},
 			"labels": resourceschema.MapAttribute{
-				Description: "Metadata to attach to image",
-				ElementType: types.StringType,
-				Optional:    true,
+				MarkdownDescription: "Metadata to attach to image",
+				ElementType:         types.StringType,
+				Optional:            true,
 				PlanModifiers: []planmodifier.Map{
 					mapplanmodifier.RequiresReplace(),
 				},
 			},
 			"stop_signal": resourceschema.StringAttribute{
-				Description: "Signal to use to stop command in container when shutting down",
-				Optional:    true,
+				MarkdownDescription: "Signal to use to stop command in container when shutting down",
+				Optional:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
 			"hash": resourceschema.StringAttribute{
-				Description: "Hash of the pushed image in a format `algo:hex` like `sha256:0123abcd...`",
-				Computed:    true,
+				MarkdownDescription: "Hash of the pushed image in a format `algo:hex` like `sha256:0123abcd...`",
+				Computed:            true,
 			},
 		},
 	}
@@ -507,6 +507,7 @@ func (i *ImageResource) Create(ctx context.Context, req resource.CreateRequest, 
 		return nil
 	}(); err != nil {
 		resp.Diagnostics.AddError("Error building and pushing image", err.Error())
+		return
 	}
 
 	diags = resp.State.Set(ctx, &state)
