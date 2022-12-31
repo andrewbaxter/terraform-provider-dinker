@@ -295,8 +295,70 @@ func (i *ImageResource) Configure(_ context.Context, req resource.ConfigureReque
 	i.ProviderData = req.ProviderData.(ThisProviderModel)
 }
 
-func (i *ImageResource) Read(context.Context, resource.ReadRequest, *resource.ReadResponse) {
-	// nop
+func buildDestImageCtx(state *ImageResourceModel) imagetypes.SystemContext {
+	return imagetypes.SystemContext{
+		DockerInsecureSkipTLSVerify: imagetypes.OptionalBoolTrue,
+		DockerAuthConfig: &imagetypes.DockerAuthConfig{
+			Username: state.DestUser.ValueString(),
+			Password: state.DestPassword.ValueString(),
+		},
+	}
+}
+
+func (i *ImageResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+	var state ImageResourceModel
+	diags := req.State.Get(ctx, &state)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	hash, err := func() (*string, error) {
+		destRef, err := alltransports.ParseImageName(state.Dest.ValueString())
+		if err != nil {
+			return nil, fmt.Errorf("invalid dest image ref %s: %w %#v", state.Dest, err, err)
+		}
+		destImageCtx := buildDestImageCtx(&state)
+
+		destRefSrc, err := destRef.NewImageSource(ctx, &destImageCtx)
+		if err != nil {
+			// Assume any error == not found. Returns a "manifest unknown" in local testing but I don't know
+			// if that's host specific, etc
+			return nil, nil
+		}
+		defer func() {
+			if err := destRefSrc.Close(); err != nil {
+				resp.Diagnostics.AddWarning("Failed to close dest image ref source", err.Error())
+			}
+		}()
+		manifestRaw, _, err := destRefSrc.GetManifest(ctx, nil)
+		if err != nil {
+			// Assume any error == not found, since I didn't see a good way to extract 404 errors from this call
+			return nil, nil
+		}
+		manifestDigest, err := manifest.Digest(manifestRaw)
+		if err != nil {
+			return nil, err
+		}
+		out := manifestDigest.String()
+		return &out, nil
+	}()
+	if err != nil {
+		resp.Diagnostics.AddError("Error reading image state", err.Error())
+		return
+	} else {
+		if hash != nil {
+			state.Hash = types.StringValue(*hash)
+		} else {
+			state.Hash = types.StringNull()
+		}
+	}
+
+	diags = resp.State.Set(ctx, &state)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 }
 
 func (i *ImageResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
@@ -337,40 +399,10 @@ func (i *ImageResource) Create(ctx context.Context, req resource.CreateRequest, 
 			}
 		}
 
-		destImageCtx := imagetypes.SystemContext{
-			DockerInsecureSkipTLSVerify: imagetypes.OptionalBoolTrue,
-			DockerAuthConfig: &imagetypes.DockerAuthConfig{
-				Username: state.DestUser.ValueString(),
-				Password: state.DestPassword.ValueString(),
-			},
-		}
-
 		destRef, err := alltransports.ParseImageName(state.Dest.ValueString())
 		if err != nil {
 			return fmt.Errorf("invalid dest image ref %s: %w %#v", state.Dest, err, err)
 		}
-
-		// Check if image exists
-		{
-			destRefSrc, err := destRef.NewImageSource(ctx, &destImageCtx)
-			if err != nil {
-				// Assume any error == not found. Returns a "manifest unknown" in local testing but I don't know
-				// if that's host specific, etc
-				goto DoesntExist
-			}
-			defer func() {
-				if err := destRefSrc.Close(); err != nil {
-					resp.Diagnostics.AddWarning("Failed to close dest image ref source", err.Error())
-				}
-			}()
-			_, _, err = destRefSrc.GetManifest(ctx, nil)
-			if err != nil {
-				// Assume any error == not found, since I didn't see a good way to extract 404 errors from this call
-				goto DoesntExist
-			}
-			return nil
-		}
-	DoesntExist:
 
 		// Ensure from image cached locally
 		var imagePath dinkerlib.AbsPath
@@ -483,6 +515,7 @@ func (i *ImageResource) Create(ctx context.Context, req resource.CreateRequest, 
 					panic(err)
 				}
 
+				destImageCtx := buildDestImageCtx(&state)
 				manifestRaw, err := imagecopy.Image(
 					context.TODO(),
 					policyContext,
