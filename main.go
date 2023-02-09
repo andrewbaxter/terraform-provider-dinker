@@ -518,8 +518,8 @@ func (i *ImageResource) Create(ctx context.Context, req resource.CreateRequest, 
 
 				destString := state.Dest.ValueString()
 				for k, v := range map[string]string{
-					"hash":      hash,
-					"shortHash": hash[:8],
+					"hash":       hash,
+					"short_hash": hash[:8],
 				} {
 					destString = strings.ReplaceAll(destString, fmt.Sprintf("{%s}", k), v)
 				}
