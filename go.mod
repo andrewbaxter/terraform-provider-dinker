@@ -4,7 +4,7 @@ go 1.19
 
 require (
 	github.com/Wessie/appdirs v0.0.0-20141031215813-6573e894f8e2
-	github.com/andrewbaxter/dinker v0.0.6
+	github.com/andrewbaxter/dinker v0.0.7
 	github.com/containers/image/v5 v5.24.0
 	github.com/hashicorp/terraform-plugin-framework v1.1.1
 	github.com/samber/lo v1.37.0

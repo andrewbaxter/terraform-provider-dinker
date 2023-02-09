@@ -17,21 +17,34 @@ Build and push an image
 
 ### Required
 
-- `cmd` (List of String) Default command run in container
-- `dest` (String) Where to send generated image; skopeo-style reference, see <https://github.com/containers/image/blob/main/docs/containers-transports.5.md> for a full list
+- `dest` (String) Where to send generated image; skopeo-style reference, see <https://github.com/containers/image/blob/main/docs/containers-transports.5.md> for a full list. This is a pattern - you can add the following strings which will be replaced with generated information:
+
+* `{hash}` - A sha256 sum of all the information used to generate the image (note: this should be stable but has no formal specification and is unrelated to the pushed manifest hash).
+
+* `{short_hash}` - The first hex digits of the hash
 - `files` (Attributes List) Files to add to image (see [below for nested schema](#nestedatt--files))
 - `from` (String) FROM image to base generated image on; skopeo-style reference, see <https://github.com/containers/image/blob/main/docs/containers-transports.5.md> for a full list
-- `ports` (Attributes List) Container ports to expose (see [below for nested schema](#nestedatt--ports))
 
 ### Optional
 
 - `add_env` (Map of String) Add these environment variables when running command in container
 - `clear_env` (Boolean) User to use if pushing generated image to remote
+- `cmd` (List of String) Overridable command parts, concatenated after `entrypoint`
 - `dest_password` (String) Password to use if pushing generated image to remote
 - `dest_user` (String) User to use if pushing generated image to remote
+- `entrypoint` (List of String) Un-overridable command parts, concatenated before `cmd`
 - `from_password` (String) Password to use if pulling FROM image from remote
 - `from_user` (String) User to use if pulling FROM image from remote
-- `working_dir` (String) Working dir for command in container
+- `labels` (Map of String) Metadata to attach to image
+- `ports` (Attributes List) Container ports to expose (see [below for nested schema](#nestedatt--ports))
+- `stop_signal` (String) Signal to use to stop command in container when shutting down
+- `user` (String) User to run command as in container; defaults to user in FROM image
+- `working_dir` (String) Working dir for command in container; defaults to working dir in FROM image
+
+### Read-Only
+
+- `hash` (String) Addressable content hash of the pushed image manifest in a format `algo:hex` like `sha256:0123abcd...`
+- `rendered_dest` (String) `dest` after interpolating generated information.
 
 <a id="nestedatt--files"></a>
 ### Nested Schema for `files`

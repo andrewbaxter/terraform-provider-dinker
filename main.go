@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 
 	"github.com/Wessie/appdirs"
 	"github.com/andrewbaxter/dinker/dinkerlib"
@@ -96,23 +97,24 @@ type ImageResourceModelPort struct {
 }
 
 type ImageResourceModel struct {
-	From         types.String                  `tfsdk:"from"`
-	FromUser     types.String                  `tfsdk:"from_user"`
-	FromPassword types.String                  `tfsdk:"from_password"`
-	Dest         types.String                  `tfsdk:"dest"`
-	DestUser     types.String                  `tfsdk:"dest_user"`
-	DestPassword types.String                  `tfsdk:"dest_password"`
-	Files        []ImageResourceModelFile      `tfsdk:"files"`
-	ClearEnv     types.Bool                    `tfsdk:"clear_env"`
-	AddEnv       map[types.String]types.String `tfsdk:"add_env"`
-	WorkingDir   types.String                  `tfsdk:"working_dir"`
-	User         types.String                  `tfsdk:"user"`
-	Entrypoint   []types.String                `tfsdk:"entrypoint"`
-	Cmd          []types.String                `tfsdk:"cmd"`
-	Ports        []ImageResourceModelPort      `tfsdk:"ports"`
-	Labels       map[types.String]types.String `tfsdk:"labels"`
-	StopSignal   types.String                  `tfsdk:"stop_signal"`
-	Hash         types.String                  `tfsdk:"hash"`
+	From         types.String             `tfsdk:"from"`
+	FromUser     types.String             `tfsdk:"from_user"`
+	FromPassword types.String             `tfsdk:"from_password"`
+	Dest         types.String             `tfsdk:"dest"`
+	DestUser     types.String             `tfsdk:"dest_user"`
+	DestPassword types.String             `tfsdk:"dest_password"`
+	Files        []ImageResourceModelFile `tfsdk:"files"`
+	ClearEnv     types.Bool               `tfsdk:"clear_env"`
+	AddEnv       map[string]types.String  `tfsdk:"add_env"`
+	WorkingDir   types.String             `tfsdk:"working_dir"`
+	User         types.String             `tfsdk:"user"`
+	Entrypoint   []types.String           `tfsdk:"entrypoint"`
+	Cmd          []types.String           `tfsdk:"cmd"`
+	Ports        []ImageResourceModelPort `tfsdk:"ports"`
+	Labels       map[string]types.String  `tfsdk:"labels"`
+	StopSignal   types.String             `tfsdk:"stop_signal"`
+	RenderedDest types.String             `tfsdk:"rendered_dest"`
+	Hash         types.String             `tfsdk:"hash"`
 }
 
 type ImageResource struct {
@@ -148,7 +150,7 @@ func (ImageResource) Schema(_ context.Context, req resource.SchemaRequest, resp 
 				Optional:            true,
 			},
 			"dest": resourceschema.StringAttribute{
-				MarkdownDescription: "Where to send generated image; skopeo-style reference, see <https://github.com/containers/image/blob/main/docs/containers-transports.5.md> for a full list",
+				MarkdownDescription: "Where to send generated image; skopeo-style reference, see <https://github.com/containers/image/blob/main/docs/containers-transports.5.md> for a full list. This is a pattern - you can add the following strings which will be replaced with generated information:\n\n* `{hash}` - A sha256 sum of all the information used to generate the image (note: this should be stable but has no formal specification and is unrelated to the pushed manifest hash).\n\n* `{short_hash}` - The first hex digits of the hash",
 				Required:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
@@ -279,8 +281,12 @@ func (ImageResource) Schema(_ context.Context, req resource.SchemaRequest, resp 
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
+			"rendered_dest": resourceschema.StringAttribute{
+				MarkdownDescription: "`dest` after interpolating generated information.",
+				Computed:            true,
+			},
 			"hash": resourceschema.StringAttribute{
-				MarkdownDescription: "Hash of the pushed image in a format `algo:hex` like `sha256:0123abcd...`",
+				MarkdownDescription: "Addressable content hash of the pushed image manifest in a format `algo:hex` like `sha256:0123abcd...`",
 				Computed:            true,
 			},
 		},
@@ -314,9 +320,9 @@ func (i *ImageResource) Read(ctx context.Context, req resource.ReadRequest, resp
 	}
 
 	hash, err := func() (*string, error) {
-		destRef, err := alltransports.ParseImageName(state.Dest.ValueString())
+		destRef, err := alltransports.ParseImageName(state.RenderedDest.ValueString())
 		if err != nil {
-			return nil, fmt.Errorf("invalid dest image ref %s: %w %#v", state.Dest, err, err)
+			return nil, fmt.Errorf("invalid dest image ref %s: %w %#v", state.RenderedDest.ValueString(), err, err)
 		}
 		destImageCtx := buildDestImageCtx(&state)
 
@@ -399,11 +405,6 @@ func (i *ImageResource) Create(ctx context.Context, req resource.CreateRequest, 
 			}
 		}
 
-		destRef, err := alltransports.ParseImageName(state.Dest.ValueString())
-		if err != nil {
-			return fmt.Errorf("invalid dest image ref %s: %w %#v", state.Dest, err, err)
-		}
-
 		// Ensure from image cached locally
 		var imagePath dinkerlib.AbsPath
 		{
@@ -459,7 +460,7 @@ func (i *ImageResource) Create(ctx context.Context, req resource.CreateRequest, 
 					resp.Diagnostics.AddWarning("Failed to clean up image staging dir "+destDirPath.String(), err.Error())
 				}
 			}()
-			err = dinkerlib.BuildImage(dinkerlib.BuildImageArgs{
+			hash, err := dinkerlib.BuildImage(dinkerlib.BuildImageArgs{
 				FromPath:    imagePath,
 				DestDirPath: destDirPath,
 				Files: lo.Map(
@@ -475,8 +476,8 @@ func (i *ImageResource) Create(ctx context.Context, req resource.CreateRequest, 
 				ClearEnv: state.ClearEnv.ValueBool(),
 				AddEnv: lo.MapEntries(
 					state.AddEnv,
-					func(key types.String, value types.String) (string, string) {
-						return key.ValueString(), value.ValueString()
+					func(key string, value types.String) (string, string) {
+						return key, value.ValueString()
 					},
 				),
 				WorkingDir: state.WorkingDir.ValueString(),
@@ -498,8 +499,8 @@ func (i *ImageResource) Create(ctx context.Context, req resource.CreateRequest, 
 				),
 				Labels: lo.MapEntries(
 					state.Labels,
-					func(key types.String, value types.String) (string, string) {
-						return key.ValueString(), value.ValueString()
+					func(key string, value types.String) (string, string) {
+						return key, value.ValueString()
 					},
 				),
 				StopSignal: state.StopSignal.ValueString(),
@@ -515,14 +516,39 @@ func (i *ImageResource) Create(ctx context.Context, req resource.CreateRequest, 
 					panic(err)
 				}
 
+				destString := state.Dest.ValueString()
+				for k, v := range map[string]string{
+					"hash":      hash,
+					"shortHash": hash[:8],
+				} {
+					destString = strings.ReplaceAll(destString, fmt.Sprintf("{%s}", k), v)
+				}
+				state.RenderedDest = types.StringValue(destString)
+				destRef, err := alltransports.ParseImageName(destString)
+				if err != nil {
+					return fmt.Errorf("invalid dest image ref %s: %w %#v", destString, err, err)
+				}
+
 				destImageCtx := buildDestImageCtx(&state)
+				destImage, err := destRef.NewImageDestination(context.TODO(), &destImageCtx)
+				if err != nil {
+					panic(err)
+				}
+				manifestFormat := ""
+				for _, format := range destImage.SupportedManifestMIMETypes() {
+					// Prefer docker manifest
+					if format == manifest.DockerV2Schema2MediaType {
+						manifestFormat = format
+					}
+				}
 				manifestRaw, err := imagecopy.Image(
 					context.TODO(),
 					policyContext,
 					destRef,
 					sourceRef,
 					&imagecopy.Options{
-						DestinationCtx: &destImageCtx,
+						DestinationCtx:        &destImageCtx,
+						ForceManifestMIMEType: manifestFormat,
 					},
 				)
 				if err != nil {
