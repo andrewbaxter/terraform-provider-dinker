@@ -23,19 +23,23 @@ Build and push an image
 
 * `{short_hash}` - The first hex digits of the hash
 - `files` (Attributes List) Files to add to image (see [below for nested schema](#nestedatt--files))
-- `from` (String) FROM image to base generated image on; skopeo-style reference, see <https://github.com/containers/image/blob/main/docs/containers-transports.5.md> for a full list
 
 ### Optional
 
 - `add_env` (Map of String) Add these environment variables when running command in container
+- `arch` (List of String) Defaults to `from` image architecture. Required if `from` omitted.
 - `clear_env` (Boolean) User to use if pushing generated image to remote
 - `cmd` (List of String) Overridable command parts, concatenated after `entrypoint`
+- `dest_http` (Boolean) Allow http and unverified SSL
 - `dest_password` (String) Password to use if pushing generated image to remote
 - `dest_user` (String) User to use if pushing generated image to remote
 - `entrypoint` (List of String) Un-overridable command parts, concatenated before `cmd`
+- `from` (String) FROM image to base generated image on; skopeo-style reference, see <https://github.com/containers/image/blob/main/docs/containers-transports.5.md> for a full list. If not specified, has no base layer.
+- `from_http` (Boolean) Allow http and unverified SSL
 - `from_password` (String) Password to use if pulling FROM image from remote
 - `from_user` (String) User to use if pulling FROM image from remote
 - `labels` (Map of String) Metadata to attach to image
+- `os` (List of String) Defaults to `from` image os. Required if `from` omitted.
 - `ports` (Attributes List) Container ports to expose (see [below for nested schema](#nestedatt--ports))
 - `stop_signal` (String) Signal to use to stop command in container when shutting down
 - `user` (String) User to run command as in container; defaults to user in FROM image

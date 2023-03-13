@@ -97,15 +97,22 @@ type ImageResourceModelPort struct {
 }
 
 type ImageResourceModel struct {
+	// Required
+	Dest  types.String             `tfsdk:"dest"`
+	Files []ImageResourceModelFile `tfsdk:"files"`
+	// Required if no FROM
+	Arch types.String `tfsdk:"arch"`
+	Os   types.String `tfsdk:"os"`
+	// Optional
 	From         types.String             `tfsdk:"from"`
 	FromUser     types.String             `tfsdk:"from_user"`
 	FromPassword types.String             `tfsdk:"from_password"`
-	Dest         types.String             `tfsdk:"dest"`
+	FromHttp     types.Bool               `tfsdk:"from_http"`
 	DestUser     types.String             `tfsdk:"dest_user"`
 	DestPassword types.String             `tfsdk:"dest_password"`
-	Files        []ImageResourceModelFile `tfsdk:"files"`
-	ClearEnv     types.Bool               `tfsdk:"clear_env"`
+	DestHttp     types.Bool               `tfsdk:"dest_http"`
 	AddEnv       map[string]types.String  `tfsdk:"add_env"`
+	ClearEnv     types.Bool               `tfsdk:"clear_env"`
 	WorkingDir   types.String             `tfsdk:"working_dir"`
 	User         types.String             `tfsdk:"user"`
 	Entrypoint   []types.String           `tfsdk:"entrypoint"`
@@ -113,8 +120,9 @@ type ImageResourceModel struct {
 	Ports        []ImageResourceModelPort `tfsdk:"ports"`
 	Labels       map[string]types.String  `tfsdk:"labels"`
 	StopSignal   types.String             `tfsdk:"stop_signal"`
-	RenderedDest types.String             `tfsdk:"rendered_dest"`
-	Hash         types.String             `tfsdk:"hash"`
+	// Outputs
+	RenderedDest types.String `tfsdk:"rendered_dest"`
+	Hash         types.String `tfsdk:"hash"`
 }
 
 type ImageResource struct {
@@ -134,35 +142,13 @@ func (ImageResource) Schema(_ context.Context, req resource.SchemaRequest, resp 
 	resp.Schema = resourceschema.Schema{
 		MarkdownDescription: "Build and push an image",
 		Attributes: map[string]resourceschema.Attribute{
-			"from": resourceschema.StringAttribute{
-				MarkdownDescription: "FROM image to base generated image on; skopeo-style reference, see <https://github.com/containers/image/blob/main/docs/containers-transports.5.md> for a full list",
-				Required:            true,
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.RequiresReplace(),
-				},
-			},
-			"from_user": resourceschema.StringAttribute{
-				MarkdownDescription: "User to use if pulling FROM image from remote",
-				Optional:            true,
-			},
-			"from_password": resourceschema.StringAttribute{
-				MarkdownDescription: "Password to use if pulling FROM image from remote",
-				Optional:            true,
-			},
+			// Required
 			"dest": resourceschema.StringAttribute{
 				MarkdownDescription: "Where to send generated image; skopeo-style reference, see <https://github.com/containers/image/blob/main/docs/containers-transports.5.md> for a full list. This is a pattern - you can add the following strings which will be replaced with generated information:\n\n* `{hash}` - A sha256 sum of all the information used to generate the image (note: this should be stable but has no formal specification and is unrelated to the pushed manifest hash).\n\n* `{short_hash}` - The first hex digits of the hash",
 				Required:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
-			},
-			"dest_user": resourceschema.StringAttribute{
-				MarkdownDescription: "User to use if pushing generated image to remote",
-				Optional:            true,
-			},
-			"dest_password": resourceschema.StringAttribute{
-				MarkdownDescription: "Password to use if pushing generated image to remote",
-				Optional:            true,
 			},
 			"files": resourceschema.ListNestedAttribute{
 				MarkdownDescription: "Files to add to image",
@@ -196,12 +182,56 @@ func (ImageResource) Schema(_ context.Context, req resource.SchemaRequest, resp 
 					listplanmodifier.RequiresReplace(),
 				},
 			},
-			"clear_env": resourceschema.BoolAttribute{
+
+			// Required if no FROM
+			"arch": resourceschema.ListAttribute{
+				MarkdownDescription: "Defaults to `from` image architecture. Required if `from` omitted.",
+				ElementType:         types.StringType,
+				Optional:            true,
+				PlanModifiers: []planmodifier.List{
+					listplanmodifier.RequiresReplace(),
+				},
+			},
+			"os": resourceschema.ListAttribute{
+				MarkdownDescription: "Defaults to `from` image os. Required if `from` omitted.",
+				ElementType:         types.StringType,
+				Optional:            true,
+				PlanModifiers: []planmodifier.List{
+					listplanmodifier.RequiresReplace(),
+				},
+			},
+
+			// Optional
+			"from": resourceschema.StringAttribute{
+				MarkdownDescription: "FROM image to base generated image on; skopeo-style reference, see <https://github.com/containers/image/blob/main/docs/containers-transports.5.md> for a full list. If not specified, has no base layer.",
+				Optional:            true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
+			},
+			"from_user": resourceschema.StringAttribute{
+				MarkdownDescription: "User to use if pulling FROM image from remote",
+				Optional:            true,
+			},
+			"from_password": resourceschema.StringAttribute{
+				MarkdownDescription: "Password to use if pulling FROM image from remote",
+				Optional:            true,
+			},
+			"from_http": resourceschema.BoolAttribute{
+				MarkdownDescription: "Allow http and unverified SSL",
+				Optional:            true,
+			},
+			"dest_user": resourceschema.StringAttribute{
 				MarkdownDescription: "User to use if pushing generated image to remote",
 				Optional:            true,
-				PlanModifiers: []planmodifier.Bool{
-					boolplanmodifier.RequiresReplace(),
-				},
+			},
+			"dest_password": resourceschema.StringAttribute{
+				MarkdownDescription: "Password to use if pushing generated image to remote",
+				Optional:            true,
+			},
+			"dest_http": resourceschema.BoolAttribute{
+				MarkdownDescription: "Allow http and unverified SSL",
+				Optional:            true,
 			},
 			"add_env": resourceschema.MapAttribute{
 				MarkdownDescription: "Add these environment variables when running command in container",
@@ -209,6 +239,13 @@ func (ImageResource) Schema(_ context.Context, req resource.SchemaRequest, resp 
 				Optional:            true,
 				PlanModifiers: []planmodifier.Map{
 					mapplanmodifier.RequiresReplace(),
+				},
+			},
+			"clear_env": resourceschema.BoolAttribute{
+				MarkdownDescription: "User to use if pushing generated image to remote",
+				Optional:            true,
+				PlanModifiers: []planmodifier.Bool{
+					boolplanmodifier.RequiresReplace(),
 				},
 			},
 			"working_dir": resourceschema.StringAttribute{
@@ -281,6 +318,8 @@ func (ImageResource) Schema(_ context.Context, req resource.SchemaRequest, resp 
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
+
+			// Outputs
 			"rendered_dest": resourceschema.StringAttribute{
 				MarkdownDescription: "`dest` after interpolating generated information.",
 				Computed:            true,
@@ -473,7 +512,9 @@ func (i *ImageResource) Create(ctx context.Context, req resource.CreateRequest, 
 						}
 					},
 				),
-				ClearEnv: state.ClearEnv.ValueBool(),
+				Architecture: state.Arch.String(),
+				Os:           state.Os.String(),
+				ClearEnv:     state.ClearEnv.ValueBool(),
 				AddEnv: lo.MapEntries(
 					state.AddEnv,
 					func(key string, value types.String) (string, string) {
