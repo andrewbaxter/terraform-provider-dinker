@@ -342,11 +342,13 @@ func (i *ImageResource) Configure(_ context.Context, req resource.ConfigureReque
 
 func buildDestImageCtx(state *ImageResourceModel) imagetypes.SystemContext {
 	return imagetypes.SystemContext{
-		DockerInsecureSkipTLSVerify: imagetypes.OptionalBoolTrue,
 		DockerAuthConfig: &imagetypes.DockerAuthConfig{
 			Username: state.DestUser.ValueString(),
 			Password: state.DestPassword.ValueString(),
 		},
+		OCIInsecureSkipTLSVerify:          state.DestHttp.ValueBool(),
+		DockerInsecureSkipTLSVerify:       imagetypes.NewOptionalBool(state.DestHttp.ValueBool()),
+		DockerDaemonInsecureSkipTLSVerify: state.DestHttp.ValueBool(),
 	}
 }
 
@@ -475,6 +477,9 @@ func (i *ImageResource) Create(ctx context.Context, req resource.CreateRequest, 
 							Username: state.FromUser.ValueString(),
 							Password: state.FromPassword.ValueString(),
 						},
+						OCIInsecureSkipTLSVerify:          state.FromHttp.ValueBool(),
+						DockerInsecureSkipTLSVerify:       imagetypes.NewOptionalBool(state.FromHttp.ValueBool()),
+						DockerDaemonInsecureSkipTLSVerify: state.FromHttp.ValueBool(),
 					},
 				},
 			)
