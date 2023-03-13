@@ -184,21 +184,13 @@ func (ImageResource) Schema(_ context.Context, req resource.SchemaRequest, resp 
 			},
 
 			// Required if no FROM
-			"arch": resourceschema.ListAttribute{
+			"arch": resourceschema.StringAttribute{
 				MarkdownDescription: "Defaults to `from` image architecture. Required if `from` omitted.",
-				ElementType:         types.StringType,
 				Optional:            true,
-				PlanModifiers: []planmodifier.List{
-					listplanmodifier.RequiresReplace(),
-				},
 			},
-			"os": resourceschema.ListAttribute{
+			"os": resourceschema.StringAttribute{
 				MarkdownDescription: "Defaults to `from` image os. Required if `from` omitted.",
-				ElementType:         types.StringType,
 				Optional:            true,
-				PlanModifiers: []planmodifier.List{
-					listplanmodifier.RequiresReplace(),
-				},
 			},
 
 			// Optional

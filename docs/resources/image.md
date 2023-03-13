@@ -27,7 +27,7 @@ Build and push an image
 ### Optional
 
 - `add_env` (Map of String) Add these environment variables when running command in container
-- `arch` (List of String) Defaults to `from` image architecture. Required if `from` omitted.
+- `arch` (String) Defaults to `from` image architecture. Required if `from` omitted.
 - `clear_env` (Boolean) User to use if pushing generated image to remote
 - `cmd` (List of String) Overridable command parts, concatenated after `entrypoint`
 - `dest_http` (Boolean) Allow http and unverified SSL
@@ -39,7 +39,7 @@ Build and push an image
 - `from_password` (String) Password to use if pulling FROM image from remote
 - `from_user` (String) User to use if pulling FROM image from remote
 - `labels` (Map of String) Metadata to attach to image
-- `os` (List of String) Defaults to `from` image os. Required if `from` omitted.
+- `os` (String) Defaults to `from` image os. Required if `from` omitted.
 - `ports` (Attributes List) Container ports to expose (see [below for nested schema](#nestedatt--ports))
 - `stop_signal` (String) Signal to use to stop command in container when shutting down
 - `user` (String) User to run command as in container; defaults to user in FROM image
