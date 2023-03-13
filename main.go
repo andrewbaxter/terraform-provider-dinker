@@ -440,7 +440,7 @@ func (i *ImageResource) Create(ctx context.Context, req resource.CreateRequest, 
 
 		// Ensure from image cached locally
 		var imagePath dinkerlib.AbsPath
-		{
+		if state.From.ValueString() != "" {
 			d := sha256.New()
 			d.Write([]byte(state.From.ValueString()))
 			imagePath = cachePath.Join(fmt.Sprintf(
@@ -448,35 +448,35 @@ func (i *ImageResource) Create(ctx context.Context, req resource.CreateRequest, 
 				hex.EncodeToString(d.Sum([]byte{})),
 				regexp.MustCompile("[^a-zA-Z_.-]+").ReplaceAllString(state.From.ValueString(), "_"),
 			))
-		}
-		if !imagePath.Exists() {
-			sourceRef, err := alltransports.ParseImageName(state.From.ValueString())
-			if err != nil {
-				return fmt.Errorf("error parsing FROM pull ref %s: %w", state.From, err)
-			}
-			imageRef, err := archive.Transport.ParseReference(imagePath.Raw())
-			if err != nil {
-				panic(err)
-			}
-			_, err = imagecopy.Image(
-				context.TODO(),
-				policyContext,
-				imageRef,
-				sourceRef,
-				&imagecopy.Options{
-					SourceCtx: &imagetypes.SystemContext{
-						DockerAuthConfig: &imagetypes.DockerAuthConfig{
-							Username: state.FromUser.ValueString(),
-							Password: state.FromPassword.ValueString(),
+			if !imagePath.Exists() {
+				sourceRef, err := alltransports.ParseImageName(state.From.ValueString())
+				if err != nil {
+					return fmt.Errorf("error parsing FROM pull ref %s: %w", state.From, err)
+				}
+				imageRef, err := archive.Transport.ParseReference(imagePath.Raw())
+				if err != nil {
+					panic(err)
+				}
+				_, err = imagecopy.Image(
+					context.TODO(),
+					policyContext,
+					imageRef,
+					sourceRef,
+					&imagecopy.Options{
+						SourceCtx: &imagetypes.SystemContext{
+							DockerAuthConfig: &imagetypes.DockerAuthConfig{
+								Username: state.FromUser.ValueString(),
+								Password: state.FromPassword.ValueString(),
+							},
+							OCIInsecureSkipTLSVerify:          state.FromHttp.ValueBool(),
+							DockerInsecureSkipTLSVerify:       imagetypes.NewOptionalBool(state.FromHttp.ValueBool()),
+							DockerDaemonInsecureSkipTLSVerify: state.FromHttp.ValueBool(),
 						},
-						OCIInsecureSkipTLSVerify:          state.FromHttp.ValueBool(),
-						DockerInsecureSkipTLSVerify:       imagetypes.NewOptionalBool(state.FromHttp.ValueBool()),
-						DockerDaemonInsecureSkipTLSVerify: state.FromHttp.ValueBool(),
 					},
-				},
-			)
-			if err != nil {
-				return fmt.Errorf("error pulling FROM image %s: %w", state.From, err)
+				)
+				if err != nil {
+					return fmt.Errorf("error pulling FROM image %s: %w", state.From, err)
+				}
 			}
 		}
 
@@ -509,8 +509,8 @@ func (i *ImageResource) Create(ctx context.Context, req resource.CreateRequest, 
 						}
 					},
 				),
-				Architecture: state.Arch.String(),
-				Os:           state.Os.String(),
+				Architecture: state.Arch.ValueString(),
+				Os:           state.Os.ValueString(),
 				ClearEnv:     state.ClearEnv.ValueBool(),
 				AddEnv: lo.MapEntries(
 					state.AddEnv,
