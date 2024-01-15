@@ -214,7 +214,7 @@ func (ImageResource) Schema(_ context.Context, req resource.SchemaRequest, resp 
 				MarkdownDescription: "Allow http and unverified SSL",
 				Optional:            true,
 			},
-			"from_host": resourceschema.BoolAttribute{
+			"from_host": resourceschema.StringAttribute{
 				MarkdownDescription: "Override the docker daemon host when using the `docker-daemon` transport. Takes a URL (like `unix:///var/run/docker.sock`)",
 				Optional:            true,
 			},
@@ -230,7 +230,7 @@ func (ImageResource) Schema(_ context.Context, req resource.SchemaRequest, resp 
 				MarkdownDescription: "Allow http and unverified SSL",
 				Optional:            true,
 			},
-			"dest_host": resourceschema.BoolAttribute{
+			"dest_host": resourceschema.StringAttribute{
 				MarkdownDescription: "Override the docker daemon host when using the `docker-daemon` transport. Takes a URL (like `unix:///var/run/docker.sock`)",
 				Optional:            true,
 			},
