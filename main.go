@@ -12,7 +12,6 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/Wessie/appdirs"
 	"github.com/andrewbaxter/dinker/dinkerlib"
 	imagecopy "github.com/containers/image/v5/copy"
 	"github.com/containers/image/v5/manifest"
@@ -108,9 +107,11 @@ type ImageResourceModel struct {
 	FromUser     types.String             `tfsdk:"from_user"`
 	FromPassword types.String             `tfsdk:"from_password"`
 	FromHttp     types.Bool               `tfsdk:"from_http"`
+	FromHost     types.String             `tfsdk:"from_host"`
 	DestUser     types.String             `tfsdk:"dest_user"`
 	DestPassword types.String             `tfsdk:"dest_password"`
 	DestHttp     types.Bool               `tfsdk:"dest_http"`
+	DestHost     types.String             `tfsdk:"dest_host"`
 	AddEnv       map[string]types.String  `tfsdk:"add_env"`
 	ClearEnv     types.Bool               `tfsdk:"clear_env"`
 	WorkingDir   types.String             `tfsdk:"working_dir"`
@@ -213,6 +214,10 @@ func (ImageResource) Schema(_ context.Context, req resource.SchemaRequest, resp 
 				MarkdownDescription: "Allow http and unverified SSL",
 				Optional:            true,
 			},
+			"from_host": resourceschema.BoolAttribute{
+				MarkdownDescription: "Override the docker daemon host when using the `docker-daemon` transport. Takes a URL (like `unix:///var/run/docker.sock`)",
+				Optional:            true,
+			},
 			"dest_user": resourceschema.StringAttribute{
 				MarkdownDescription: "User to use if pushing generated image to remote",
 				Optional:            true,
@@ -223,6 +228,10 @@ func (ImageResource) Schema(_ context.Context, req resource.SchemaRequest, resp 
 			},
 			"dest_http": resourceschema.BoolAttribute{
 				MarkdownDescription: "Allow http and unverified SSL",
+				Optional:            true,
+			},
+			"dest_host": resourceschema.BoolAttribute{
+				MarkdownDescription: "Override the docker daemon host when using the `docker-daemon` transport. Takes a URL (like `unix:///var/run/docker.sock`)",
 				Optional:            true,
 			},
 			"add_env": resourceschema.MapAttribute{
@@ -340,6 +349,7 @@ func buildDestImageCtx(state *ImageResourceModel) imagetypes.SystemContext {
 		},
 		OCIInsecureSkipTLSVerify:          state.DestHttp.ValueBool(),
 		DockerInsecureSkipTLSVerify:       imagetypes.NewOptionalBool(state.DestHttp.ValueBool()),
+		DockerDaemonHost:                  state.DestHost.ValueString(),
 		DockerDaemonInsecureSkipTLSVerify: state.DestHttp.ValueBool(),
 	}
 }
@@ -414,7 +424,8 @@ func (i *ImageResource) Create(ctx context.Context, req resource.CreateRequest, 
 		{
 			cachePath0 := i.ProviderData.CacheDir.ValueString()
 			if cachePath0 == "" {
-				cachePath0 = appdirs.UserCacheDir("terraform-dinker", "", "", true)
+				cachePath0, _ = os.UserCacheDir()
+				cachePath0 += "/terraform-dinker"
 			}
 			cachePath1, err := filepath.Abs(cachePath0)
 			if err != nil {
@@ -470,6 +481,7 @@ func (i *ImageResource) Create(ctx context.Context, req resource.CreateRequest, 
 							},
 							OCIInsecureSkipTLSVerify:          state.FromHttp.ValueBool(),
 							DockerInsecureSkipTLSVerify:       imagetypes.NewOptionalBool(state.FromHttp.ValueBool()),
+							DockerDaemonHost:                  state.FromHost.ValueString(),
 							DockerDaemonInsecureSkipTLSVerify: state.FromHttp.ValueBool(),
 						},
 					},
