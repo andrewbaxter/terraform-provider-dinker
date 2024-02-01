@@ -117,6 +117,8 @@ github.com/andrewbaxter/dinker v0.0.31 h1:pIbyoodY9BmBulZ63sFpZ57mORktqalvmzhh/V
 github.com/andrewbaxter/dinker v0.0.31/go.mod h1:dE8K1kH4VUF2v4qgWBqDjNf48QDPIVf0zapXMK+BVwg=
 github.com/andrewbaxter/dinker v0.0.32 h1:lJF0vMbQmEa/3EcjBkrkT2Gjg6f9Mvth1Nz44RTh7RU=
 github.com/andrewbaxter/dinker v0.0.32/go.mod h1:ItCTBdCahml49yTb0OQI3D4N8Qmf7OxqXYexXs9BmM4=
+github.com/andrewbaxter/dinker v0.1.0 h1:VYG450bQRNGR07CKh1zjaVC6A1ZhSLfTqwP+DtrHCSY=
+github.com/andrewbaxter/dinker v0.1.0/go.mod h1:ItCTBdCahml49yTb0OQI3D4N8Qmf7OxqXYexXs9BmM4=
 github.com/andybalholm/brotli v1.0.1 h1:KqhlKozYbRtJvsPrrEeXcO+N2l6NYT5A2QAFmSULpEc=
 github.com/andybalholm/brotli v1.0.1/go.mod h1:loMXtMfwqflxFJPmdbJO0a3KNoPuLBgiu3qAvBg8x/Y=
 github.com/armon/go-radix v0.0.0-20180808171621-7fddfc383310/go.mod h1:ufUuZ+zHj4x4TnLV4JWEpy2hxWSpsRywHrMgIH9cCH8=

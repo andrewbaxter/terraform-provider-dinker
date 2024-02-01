@@ -34,6 +34,7 @@ Build and push an image
 - `dest_http` (Boolean) Allow http and unverified SSL
 - `dest_password` (String) Password to use if pushing generated image to remote
 - `dest_user` (String) User to use if pushing generated image to remote
+- `dirs` (Attributes List) Dirs to create in the image. This is mostly to explicitly set the file mode of intermediate directories. (see [below for nested schema](#nestedatt--dirs))
 - `entrypoint` (List of String) Un-overridable command parts, concatenated before `cmd`
 - `from` (String) FROM image to base generated image on; skopeo-style reference, see <https://github.com/containers/image/blob/main/docs/containers-transports.5.md> for a full list. If not specified, has no base layer.
 - `from_host` (String) Override the docker daemon host when using the `docker-daemon` transport. Takes a URL (like `unix:///var/run/docker.sock`)
@@ -50,6 +51,7 @@ Build and push an image
 ### Read-Only
 
 - `hash` (String) Addressable content hash of the pushed image manifest in a format `algo:hex` like `sha256:0123abcd...`
+- `hash_files` (String) A hash of the input files, before building the image
 - `rendered_dest` (String) `dest` after interpolating generated information.
 
 <a id="nestedatt--files"></a>
@@ -63,6 +65,18 @@ Optional:
 
 - `dest` (String) Where to place the file in the image; defaults to filename of source in image root
 - `mode` (String) File mode in octal, defaults to 0644
+
+
+<a id="nestedatt--dirs"></a>
+### Nested Schema for `dirs`
+
+Required:
+
+- `dest` (String) Where to create the dir in the image
+
+Optional:
+
+- `mode` (String) File mode in octal, defaults to 0755
 
 
 <a id="nestedatt--ports"></a>

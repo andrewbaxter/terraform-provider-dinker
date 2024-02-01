@@ -4,8 +4,10 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"flag"
 	"fmt"
+	"io/fs"
 	"log"
 	"os"
 	"path/filepath"
@@ -84,6 +86,11 @@ func (ThisProvider) Schema(ctx context.Context, req provider.SchemaRequest, resp
 }
 
 // Resource
+type ImageResourceModelDir struct {
+	Dest types.String `tfsdk:"dest"`
+	Mode types.String `tfsdk:"mode"`
+}
+
 type ImageResourceModelFile struct {
 	Source types.String `tfsdk:"source"`
 	Dest   types.String `tfsdk:"dest"`
@@ -103,6 +110,7 @@ type ImageResourceModel struct {
 	Arch types.String `tfsdk:"arch"`
 	Os   types.String `tfsdk:"os"`
 	// Optional
+	Dirs         []ImageResourceModelDir  `tfsdk:"dirs"`
 	From         types.String             `tfsdk:"from"`
 	FromUser     types.String             `tfsdk:"from_user"`
 	FromPassword types.String             `tfsdk:"from_password"`
@@ -122,6 +130,7 @@ type ImageResourceModel struct {
 	Labels       map[string]types.String  `tfsdk:"labels"`
 	StopSignal   types.String             `tfsdk:"stop_signal"`
 	// Outputs
+	FilesHash    types.String `tfdsk:"hash_files"`
 	RenderedDest types.String `tfsdk:"rendered_dest"`
 	Hash         types.String `tfsdk:"hash"`
 }
@@ -195,6 +204,31 @@ func (ImageResource) Schema(_ context.Context, req resource.SchemaRequest, resp 
 			},
 
 			// Optional
+			"dirs": resourceschema.ListNestedAttribute{
+				MarkdownDescription: "Dirs to create in the image. This is mostly to explicitly set the file mode of intermediate directories.",
+				Optional:            true,
+				NestedObject: resourceschema.NestedAttributeObject{
+					Attributes: map[string]resourceschema.Attribute{
+						"dest": resourceschema.StringAttribute{
+							MarkdownDescription: "Where to create the dir in the image",
+							Required:            true,
+							PlanModifiers: []planmodifier.String{
+								stringplanmodifier.RequiresReplace(),
+							},
+						},
+						"mode": resourceschema.StringAttribute{
+							MarkdownDescription: "File mode in octal, defaults to 0755",
+							Optional:            true,
+							PlanModifiers: []planmodifier.String{
+								stringplanmodifier.RequiresReplace(),
+							},
+						},
+					},
+				},
+				PlanModifiers: []planmodifier.List{
+					listplanmodifier.RequiresReplace(),
+				},
+			},
 			"from": resourceschema.StringAttribute{
 				MarkdownDescription: "FROM image to base generated image on; skopeo-style reference, see <https://github.com/containers/image/blob/main/docs/containers-transports.5.md> for a full list. If not specified, has no base layer.",
 				Optional:            true,
@@ -321,6 +355,13 @@ func (ImageResource) Schema(_ context.Context, req resource.SchemaRequest, resp 
 			},
 
 			// Outputs
+			"hash_files": resourceschema.StringAttribute{
+				MarkdownDescription: "A hash of the input files, before building the image",
+				Computed:            true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
+			},
 			"rendered_dest": resourceschema.StringAttribute{
 				MarkdownDescription: "`dest` after interpolating generated information.",
 				Computed:            true,
@@ -362,6 +403,29 @@ func (i *ImageResource) Read(ctx context.Context, req resource.ReadRequest, resp
 		return
 	}
 
+	// Hash input files
+	for _, f := range state.Files {
+		hashInput := map[string]string{}
+		filepath.WalkDir(f.Source.String(), func(path string, d fs.DirEntry, err error) error {
+			if d.Type().IsRegular() {
+				bytes, err := os.ReadFile(path)
+				if err != nil {
+					return fmt.Errorf("unable to read source file %s: %s", path, err)
+				}
+				hash := sha256.New()
+				_, _ = hash.Write(bytes)
+				hashInput[path] = hex.EncodeToString(hash.Sum(nil))
+			}
+			return nil
+		})
+		// Should be deterministic: sorted, no spaces
+		hashInput2, _ := json.Marshal(hashInput)
+		rootHash := sha256.New()
+		_, _ = rootHash.Write(hashInput2)
+		state.FilesHash = types.StringValue(hex.EncodeToString(rootHash.Sum(nil)))
+	}
+
+	// Confirm remote image
 	hash, err := func() (*string, error) {
 		destRef, err := alltransports.ParseImageName(state.RenderedDest.ValueString())
 		if err != nil {
@@ -508,19 +572,64 @@ func (i *ImageResource) Create(ctx context.Context, req resource.CreateRequest, 
 					resp.Diagnostics.AddWarning("Failed to clean up image staging dir "+destDirPath.String(), err.Error())
 				}
 			}()
-			hash, err := dinkerlib.BuildImage(dinkerlib.BuildImageArgs{
-				FromPath:    imagePath,
-				DestDirPath: destDirPath,
-				Files: lo.Map(
-					state.Files,
-					func(e ImageResourceModelFile, i int) dinkerlib.BuildImageArgsFile {
-						return dinkerlib.BuildImageArgsFile{
-							Source: dinkerlib.MakeAbsPath(e.Source.ValueString()),
-							Dest:   e.Dest.ValueString(),
-							Mode:   e.Mode.ValueString(),
+			stageRoot := dinkerlib.BuildImageArgsDir{
+				Name:  "STAGE",
+				Dirs:  []dinkerlib.BuildImageArgsDir{},
+				Files: []dinkerlib.BuildImageArgsFile{},
+			}
+			for _, d := range state.Dirs {
+				destPathSegments := strings.Split(d.Dest.ValueString(), "/")
+				at := &stageRoot
+			DirNextSeg:
+				for _, seg := range destPathSegments {
+					for i := range at.Dirs {
+						next := &at.Dirs[i]
+						if next.Name == seg {
+							at = next
+							goto DirNextSeg
 						}
-					},
-				),
+					}
+					at.Dirs = append(at.Dirs, dinkerlib.BuildImageArgsDir{
+						Name:  seg,
+						Dirs:  []dinkerlib.BuildImageArgsDir{},
+						Files: []dinkerlib.BuildImageArgsFile{},
+					})
+					at = &at.Dirs[len(at.Dirs)-1]
+				}
+				at.Mode = d.Mode.ValueString()
+			}
+			for _, f := range state.Files {
+				destPathSegments := strings.Split(f.Dest.ValueString(), "/")
+				pathLeaf := destPathSegments[len(destPathSegments)-1]
+				destPathSegments = destPathSegments[:len(destPathSegments)-1]
+				at := &stageRoot
+			FileNextSeg:
+				for _, seg := range destPathSegments {
+					for i := range at.Dirs {
+						next := &at.Dirs[i]
+						if next.Name == seg {
+							at = next
+							goto FileNextSeg
+						}
+					}
+					at.Dirs = append(at.Dirs, dinkerlib.BuildImageArgsDir{
+						Name:  seg,
+						Dirs:  []dinkerlib.BuildImageArgsDir{},
+						Files: []dinkerlib.BuildImageArgsFile{},
+					})
+					at = &at.Dirs[len(at.Dirs)-1]
+				}
+				at.Files = append(at.Files, dinkerlib.BuildImageArgsFile{
+					Name:   pathLeaf,
+					Source: dinkerlib.MakeAbsPath(f.Source.ValueString()),
+					Mode:   f.Mode.ValueString(),
+				})
+			}
+			hash, err := dinkerlib.BuildImage(dinkerlib.BuildImageArgs{
+				FromPath:     imagePath,
+				DestDirPath:  destDirPath,
+				Files:        stageRoot.Files,
+				Dirs:         stageRoot.Dirs,
 				Architecture: state.Arch.ValueString(),
 				Os:           state.Os.ValueString(),
 				ClearEnv:     state.ClearEnv.ValueBool(),
