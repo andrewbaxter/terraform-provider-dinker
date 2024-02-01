@@ -5,7 +5,7 @@ go 1.21
 toolchain go1.21.4
 
 require (
-	github.com/andrewbaxter/dinker v0.1.0
+	github.com/andrewbaxter/dinker v0.1.1
 	github.com/containers/image/v5 v5.29.0
 	github.com/hashicorp/terraform-plugin-framework v1.5.0
 	github.com/samber/lo v1.39.0

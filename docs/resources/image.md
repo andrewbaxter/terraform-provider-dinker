@@ -50,8 +50,8 @@ Build and push an image
 
 ### Read-Only
 
+- `files_hash` (String) A hash of the input files, before building the image
 - `hash` (String) Addressable content hash of the pushed image manifest in a format `algo:hex` like `sha256:0123abcd...`
-- `hash_files` (String) A hash of the input files, before building the image
 - `rendered_dest` (String) `dest` after interpolating generated information.
 
 <a id="nestedatt--files"></a>

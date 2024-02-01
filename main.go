@@ -5,11 +5,13 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io/fs"
 	"log"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -130,7 +132,7 @@ type ImageResourceModel struct {
 	Labels       map[string]types.String  `tfsdk:"labels"`
 	StopSignal   types.String             `tfsdk:"stop_signal"`
 	// Outputs
-	FilesHash    types.String `tfdsk:"hash_files"`
+	FilesHash    types.String `tfsdk:"files_hash"`
 	RenderedDest types.String `tfsdk:"rendered_dest"`
 	Hash         types.String `tfsdk:"hash"`
 }
@@ -355,7 +357,7 @@ func (ImageResource) Schema(_ context.Context, req resource.SchemaRequest, resp 
 			},
 
 			// Outputs
-			"hash_files": resourceschema.StringAttribute{
+			"files_hash": resourceschema.StringAttribute{
 				MarkdownDescription: "A hash of the input files, before building the image",
 				Computed:            true,
 				PlanModifiers: []planmodifier.String{
@@ -395,6 +397,33 @@ func buildDestImageCtx(state *ImageResourceModel) imagetypes.SystemContext {
 	}
 }
 
+func calcFilesHash(state *ImageResourceModel) error {
+	hashInput := map[string]string{}
+	for _, f := range state.Files {
+		bytes, err := os.ReadFile(f.Source.ValueString())
+		if errors.Is(err, fs.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			return fmt.Errorf("Error reading source file %s: %s", f.Source.ValueString(), err.Error())
+		}
+		hash := sha256.New()
+		_, _ = hash.Write(bytes)
+		dest := f.Dest.ValueString()
+		if dest == "" {
+			dest = path.Base(f.Source.ValueString())
+		}
+		hashInput[dest] = hex.EncodeToString(hash.Sum(nil))
+
+	}
+	// Should be deterministic: sorted, no spaces
+	hashInput2, _ := json.Marshal(hashInput)
+	rootHash := sha256.New()
+	_, _ = rootHash.Write(hashInput2)
+	state.FilesHash = types.StringValue(hex.EncodeToString(rootHash.Sum(nil)))
+	return nil
+}
+
 func (i *ImageResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	var state ImageResourceModel
 	diags := req.State.Get(ctx, &state)
@@ -404,25 +433,10 @@ func (i *ImageResource) Read(ctx context.Context, req resource.ReadRequest, resp
 	}
 
 	// Hash input files
-	for _, f := range state.Files {
-		hashInput := map[string]string{}
-		filepath.WalkDir(f.Source.String(), func(path string, d fs.DirEntry, err error) error {
-			if d.Type().IsRegular() {
-				bytes, err := os.ReadFile(path)
-				if err != nil {
-					return fmt.Errorf("unable to read source file %s: %s", path, err)
-				}
-				hash := sha256.New()
-				_, _ = hash.Write(bytes)
-				hashInput[path] = hex.EncodeToString(hash.Sum(nil))
-			}
-			return nil
-		})
-		// Should be deterministic: sorted, no spaces
-		hashInput2, _ := json.Marshal(hashInput)
-		rootHash := sha256.New()
-		_, _ = rootHash.Write(hashInput2)
-		state.FilesHash = types.StringValue(hex.EncodeToString(rootHash.Sum(nil)))
+	err := calcFilesHash(&state)
+	if err != nil {
+		resp.Diagnostics.AddError("Error calculating images hash during read", err.Error())
+		return
 	}
 
 	// Confirm remote image
@@ -483,6 +497,11 @@ func (i *ImageResource) Create(ctx context.Context, req resource.CreateRequest, 
 	}
 
 	if err := func() error {
+		err := calcFilesHash(&state)
+		if err != nil {
+			return err
+		}
+
 		// Prep
 		var cachePath dinkerlib.AbsPath
 		{
@@ -578,7 +597,7 @@ func (i *ImageResource) Create(ctx context.Context, req resource.CreateRequest, 
 				Files: []dinkerlib.BuildImageArgsFile{},
 			}
 			for _, d := range state.Dirs {
-				destPathSegments := strings.Split(d.Dest.ValueString(), "/")
+				destPathSegments := strings.Split(strings.Trim(d.Dest.ValueString(), "/"), "/")
 				at := &stageRoot
 			DirNextSeg:
 				for _, seg := range destPathSegments {
@@ -599,7 +618,7 @@ func (i *ImageResource) Create(ctx context.Context, req resource.CreateRequest, 
 				at.Mode = d.Mode.ValueString()
 			}
 			for _, f := range state.Files {
-				destPathSegments := strings.Split(f.Dest.ValueString(), "/")
+				destPathSegments := strings.Split(strings.Trim(f.Dest.ValueString(), "/"), "/")
 				pathLeaf := destPathSegments[len(destPathSegments)-1]
 				destPathSegments = destPathSegments[:len(destPathSegments)-1]
 				at := &stageRoot
