@@ -36,7 +36,8 @@ Build and push an image
 - `dest_user` (String) User to use if pushing generated image to remote
 - `dirs` (Attributes List) Dirs to create in the image. This is mostly to explicitly set the file mode of intermediate directories. (see [below for nested schema](#nestedatt--dirs))
 - `entrypoint` (List of String) Un-overridable command parts, concatenated before `cmd`
-- `from` (String) FROM image to base generated image on; skopeo-style reference, see <https://github.com/containers/image/blob/main/docs/containers-transports.5.md> for a full list. If not specified, has no base layer.
+- `from` (String) FROM image to base generated image on; skopeo-style reference, see <https://github.com/containers/image/blob/main/docs/containers-transports.5.md> for a full list. If not specified, has no base layer. This is cached and will only be downloaded once (unless the specifier changes or from_hash is explicitly set to a new value).
+- `from_hash` (String) Hash representing the contents of the FROM image, to force re-download even if the specifier doesn't change.
 - `from_host` (String) Override the docker daemon host when using the `docker-daemon` transport. Takes a URL (like `unix:///var/run/docker.sock`)
 - `from_http` (Boolean) Allow http and unverified SSL
 - `from_password` (String) Password to use if pulling FROM image from remote

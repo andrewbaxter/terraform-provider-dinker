@@ -114,6 +114,7 @@ type ImageResourceModel struct {
 	// Optional
 	Dirs         []ImageResourceModelDir  `tfsdk:"dirs"`
 	From         types.String             `tfsdk:"from"`
+	FromHash     types.String             `tfsdk:"from_hash"`
 	FromUser     types.String             `tfsdk:"from_user"`
 	FromPassword types.String             `tfsdk:"from_password"`
 	FromHttp     types.Bool               `tfsdk:"from_http"`
@@ -232,11 +233,15 @@ func (ImageResource) Schema(_ context.Context, req resource.SchemaRequest, resp 
 				},
 			},
 			"from": resourceschema.StringAttribute{
-				MarkdownDescription: "FROM image to base generated image on; skopeo-style reference, see <https://github.com/containers/image/blob/main/docs/containers-transports.5.md> for a full list. If not specified, has no base layer.",
+				MarkdownDescription: "FROM image to base generated image on; skopeo-style reference, see <https://github.com/containers/image/blob/main/docs/containers-transports.5.md> for a full list. If not specified, has no base layer. This is cached and will only be downloaded once (unless the specifier changes or from_hash is explicitly set to a new value).",
 				Optional:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
+			},
+			"from_hash": resourceschema.StringAttribute{
+				MarkdownDescription: "Hash representing the contents of the FROM image, to force re-download even if the specifier doesn't change.",
+				Optional:            true,
 			},
 			"from_user": resourceschema.StringAttribute{
 				MarkdownDescription: "User to use if pulling FROM image from remote",
@@ -535,11 +540,17 @@ func (i *ImageResource) Create(ctx context.Context, req resource.CreateRequest, 
 		// Ensure from image cached locally
 		var imagePath dinkerlib.AbsPath
 		if state.From.ValueString() != "" {
-			d := sha256.New()
-			d.Write([]byte(state.From.ValueString()))
+			var hash string
+			if state.FromHash.ValueString() != "" {
+				hash = state.FromHash.ValueString()
+			} else {
+				d := sha256.New()
+				d.Write([]byte(state.From.ValueString()))
+				hash = hex.EncodeToString(d.Sum([]byte{}))
+			}
 			imagePath = cachePath.Join(fmt.Sprintf(
 				"%s-%s.tar",
-				hex.EncodeToString(d.Sum([]byte{})),
+				hash,
 				regexp.MustCompile("[^a-zA-Z_.-]+").ReplaceAllString(state.From.ValueString(), "_"),
 			))
 			if !imagePath.Exists() {
