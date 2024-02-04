@@ -616,7 +616,7 @@ func (i *ImageResource) Create(ctx context.Context, req resource.CreateRequest, 
 						next := &at.Dirs[i]
 						if next.Name == seg {
 							at = next
-							goto DirNextSeg
+							continue DirNextSeg
 						}
 					}
 					at.Dirs = append(at.Dirs, dinkerlib.BuildImageArgsDir{
@@ -639,7 +639,7 @@ func (i *ImageResource) Create(ctx context.Context, req resource.CreateRequest, 
 						next := &at.Dirs[i]
 						if next.Name == seg {
 							at = next
-							goto FileNextSeg
+							continue FileNextSeg
 						}
 					}
 					at.Dirs = append(at.Dirs, dinkerlib.BuildImageArgsDir{
